@@ -548,7 +548,7 @@ class File:
             try:
                 self.logger.info("Opening file: %r", path)
                 tmp_file = open(path, "w+b")
-            except OSError:
+            except (OSError, ValueError):
                 tmp_file = None
 
                 self.logger.exception("Error opening temporary file")
@@ -557,8 +557,6 @@ class File:
             # Build options array.
             # Note that on Python 3, tempfile doesn't support byte names.  We
             # encode our paths using the default filesystem encoding.
-            suffix = self._ext.decode(sys.getfilesystemencoding()) if keep_extensions else None
-
             if file_dir is None:
                 dir = None
             elif isinstance(file_dir, bytes):
@@ -567,12 +565,13 @@ class File:
                 dir = file_dir  # pragma: no cover
 
             # Create a temporary (named) file with the appropriate settings.
-            self.logger.info(
-                "Creating a temporary file with options: %r", {"suffix": suffix, "delete": delete_tmp, "dir": dir}
-            )
             try:
+                suffix = self._ext.decode(sys.getfilesystemencoding()) if keep_extensions else None
+                self.logger.info(
+                    "Creating a temporary file with options: %r", {"suffix": suffix, "delete": delete_tmp, "dir": dir}
+                )
                 tmp_file = cast(BufferedRandom, tempfile.NamedTemporaryFile(suffix=suffix, delete=delete_tmp, dir=dir))
-            except OSError:
+            except (OSError, ValueError):
                 self.logger.exception("Error creating named temporary file")
                 raise FileError("Error creating named temporary file")
 

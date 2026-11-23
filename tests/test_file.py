@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from python_multipart.exceptions import FileError
 from python_multipart.multipart import File
 
 
@@ -71,3 +74,32 @@ def test_keep_filename_without_filename(tmp_path: Path) -> None:
     assert file.actual_file_name is not None
     assert Path(file.actual_file_name.decode()).parent == tmp_path
     assert Path(file.actual_file_name.decode()).read_bytes() == b"123456789012"
+
+
+def test_nul_in_kept_filename_raises_file_error(tmp_path: Path) -> None:
+    # A NUL in the kept filename must surface as FileError when flushing to disk.
+    file = File(
+        b"a\x00.txt",
+        config={
+            "UPLOAD_DIR": str(tmp_path),
+            "UPLOAD_KEEP_FILENAME": True,
+            "UPLOAD_KEEP_EXTENSIONS": True,
+            "MAX_MEMORY_FILE_SIZE": 10,
+        },
+    )
+    with pytest.raises(FileError):
+        file.write(b"123456789012")
+
+
+def test_nul_in_extension_raises_file_error() -> None:
+    # A NUL in the kept extension must surface as FileError from NamedTemporaryFile.
+    file = File(b"a.tx\x00t", config={"UPLOAD_KEEP_EXTENSIONS": True, "MAX_MEMORY_FILE_SIZE": 10})
+    with pytest.raises(FileError):
+        file.write(b"123456789012")
+
+
+def test_non_utf8_extension_raises_file_error() -> None:
+    # Extension bytes that are not valid in the filesystem encoding must be FileError.
+    file = File(b"a.\xff", config={"UPLOAD_KEEP_EXTENSIONS": True, "MAX_MEMORY_FILE_SIZE": 10})
+    with pytest.raises(FileError):
+        file.write(b"123456789012")
